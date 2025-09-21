@@ -1,52 +1,88 @@
-/* Basic layout */
-* { box-sizing: border-box; }
-html,body { height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:linear-gradient(#04121f,#071827); color:#fff; }
-
-#container {
-  width:100%;
-  height:100vh;
-  display:block;
+/* style.css - modern polished game UI */
+:root{
+  --bg-grad: linear-gradient(180deg,#e6f0ff 0%, #f7fbff 100%);
+  --card: rgba(255,255,255,0.75);
+  --accent: #0057b7; /* NASA-ish blue */
+  --accent-2: #3ccfbd;
+  --danger: #e04f4f;
+  --success: #2ea44f;
+  --glass-border: rgba(255,255,255,0.6);
+  --shadow: 0 8px 24px rgba(20,20,40,0.12);
+  font-family: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-/* UI */
-#ui {
-  position: absolute;
-  left: 16px;
-  top: 16px;
-  z-index: 20;
-  background: rgba(6,12,20,0.5);
-  padding: 12px;
-  border-radius: 10px;
-  backdrop-filter: blur(6px);
-  min-width: 180px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; background:var(--bg-grad); color:#123; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}
+.app-shell{max-width:1200px; margin:24px auto; padding:18px;}
 
-#ui .row { margin-bottom: 8px; font-size: 15px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
-#ui .controls { display:flex; gap:8px; margin-top:6px; }
-#startBtn, #resetBtn {
-  padding:6px 10px;
-  border-radius:8px;
-  border:none;
-  cursor:pointer;
-  font-weight:600;
-  color:#06202b;
-}
-#startBtn { background: #52c7ff; }
-#startBtn:hover { background: #34b3ff; }
-#resetBtn { background: #ffd166; }
-#resetBtn:hover { background: #ffc34a; }
+/* Topbar */
+.topbar{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px}
+.brand{font-size:20px; display:flex; align-items:center; gap:10px; color:var(--accent)}
+.icon-btn{background:transparent; border:1px solid transparent; padding:8px; border-radius:8px; cursor:pointer; font-size:18px}
 
-.message {
-  margin-top:10px;
-  padding:6px 8px;
-  background: rgba(0,0,0,0.25);
-  border-radius:6px;
-  font-size:13px;
-  min-height:26px;
-}
+/* Layout grid */
+.main-grid{display:grid; grid-template-columns: 1fr 360px; gap:20px; align-items:start}
 
-/* small responsive tweak */
-@media (max-width:640px){
-  #ui { left: 8px; top: 8px; font-size: 14px; min-width: 140px; }
+/* Left farm card */
+.farm-card{background:linear-gradient(180deg,#ffffffaa, #f4fbff); border-radius:14px; padding:14px; box-shadow:var(--shadow); border:1px solid var(--glass-border)}
+#farm-field{height:420px; border-radius:10px; background:linear-gradient(180deg,#8b4513 0%, #deb887 100%); position:relative; overflow:hidden; border:2px solid rgba(0,0,0,0.08)}
+#floating-icons{position:absolute; inset:12px; pointer-events:none; z-index:4}
+#crop{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:96px; transition:transform .35s ease, filter .35s ease; z-index:6; text-shadow:0 6px 14px rgba(0,0,0,0.2)}
+.soil-bar{position:absolute; left:12px; bottom:12px; height:12px; width:calc(100% - 24px); background:rgba(255,255,255,0.12); border-radius:8px; overflow:hidden}
+.soil-bar::after{content:''; display:block; height:100%; width:50%; background:linear-gradient(90deg,var(--accent-2),#77c9ff); transition:width .6s ease}
+
+/* Progress */
+.progress-row{display:flex; align-items:center; gap:8px; margin-top:12px}
+.progress{flex:1; height:10px; background:rgba(0,0,0,0.06); border-radius:8px; overflow:hidden}
+.progress-fill{height:100%; width:0%; background:linear-gradient(90deg,#ffd54f,#00c6ff); transition:width .6s ease}
+.round-display{font-weight:700; color:#333}
+
+/* Achievement badge */
+.achievement{margin-top:10px; min-height:28px; font-weight:700; color:var(--accent);}
+
+/* Right panel */
+.right-panel .card{background:var(--card); border-radius:12px; padding:14px; box-shadow:var(--shadow); border:1px solid var(--glass-border)}
+.data-row{display:flex; justify-content:space-between; padding:6px 2px}
+.button-row{display:flex; gap:10px; margin-top:8px}
+.primary{background:var(--accent); color:white; padding:10px 14px; border-radius:10px; border:none; cursor:pointer; font-weight:700}
+.secondary{background:#fff; color:var(--danger); padding:10px 14px; border-radius:10px; border:2px solid rgba(224,79,79,0.08); cursor:pointer; font-weight:700}
+.result{margin-top:12px; min-height:44px; font-size:16px}
+
+/* Scoreboard */
+.score-board{display:flex; justify-content:space-between; margin-top:12px; font-weight:700}
+
+/* NASA info & leaderboard */
+.nasa-info{margin-top:12px}
+.link-btn{background:transparent; border:none; color:var(--accent); cursor:pointer; font-weight:700; margin-top:8px}
+.leaderboard ol{padding-left:18px; margin:8px 0}
+
+/* small button */
+.small-btn{background:transparent; border:1px solid rgba(0,0,0,0.08); padding:8px; border-radius:8px; cursor:pointer; margin-top:8px}
+
+/* Footer */
+.footer{margin-top:14px; text-align:center; color:#456; font-size:13px}
+
+/* Modal */
+.modal{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); z-index:40; opacity:0; pointer-events:none; transition:opacity .25s ease}
+.modal[aria-hidden="false"]{opacity:1; pointer-events:auto}
+.modal-content{background:white; padding:18px; border-radius:12px; width:min(720px,94%); box-shadow:var(--shadow)}
+
+/* Rain & sparkles (same as before but tuned) */
+#rain-container{position:fixed; inset:0; pointer-events:none; z-index:2}
+.raindrop{position:absolute; width:2px; height:20px; background:rgba(30,144,255,0.9); opacity:0.85; animation:fall linear infinite}
+@keyframes fall{to{transform:translateY(110vh)}}
+#sparkle-container{position:fixed; inset:0; pointer-events:none; z-index:6}
+.sparkle{position:absolute; font-size:18px; animation:sparkle-fade 900ms ease-out forwards}
+@keyframes sparkle-fade{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.8)}}
+
+/* shake */
+.shake{animation:shake .6s}
+@keyframes shake{0%,100%{transform:translate(-50%,-50%) rotate(0)}20%{transform:translate(-50%,-50%) rotate(-8deg)}60%{transform:translate(-50%,-50%) rotate(8deg)}}
+
+/* responsive */
+@media (max-width:980px){
+  .main-grid{grid-template-columns:1fr; padding:0 12px}
+  .right-panel{order:2}
+  .left-panel{order:1}
+  #crop{font-size:72px}
 }

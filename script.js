@@ -1,525 +1,338 @@
-// game.js - NASA Farm Navigator 3D (enhanced)
-// Requires: three.js and OrbitControls loaded in HTML
+// script.js — Advanced UI + gameplay + education + backend integration
 
-let scene, camera, renderer, controls;
-let player, wheels = [], crops = [], birds = [];
-let particles = null;
-let clock = new THREE.Clock();
-let keys = {};
-let level = 1, score = 0, maxLevel = 10;
-let playing = false;
-let energy = 100;
-let container = document.getElementById('container');
-const startBtn = document.getElementById('startBtn');
-const resetBtn = document.getElementById('resetBtn');
-const levelEl = document.getElementById('level');
+// Elements
+const soilMoistureEl = document.getElementById('soil-moisture');
+const soilPctEl = document.getElementById('soil-pct');
+const rainfallEl = document.getElementById('rainfall');
+const instructionsEl = document.getElementById('instructions');
+const irrigateBtn = document.getElementById('irrigate-btn');
+const donotIrrigateBtn = document.getElementById('donot-irrigate-btn');
+const resultMessageEl = document.getElementById('result-message');
+const cropEl = document.getElementById('crop');
 const scoreEl = document.getElementById('score');
-const energyEl = document.getElementById('energy');
-const messageEl = document.getElementById('message');
+const roundEl = document.getElementById('round');
+const totalRoundsEl = document.getElementById('total-rounds');
+const factTextEl = document.getElementById('fact-text');
+const learnMoreBtn = document.getElementById('learn-more');
+const leaderboardList = document.getElementById('leaderboard-list');
+const saveScoreBtn = document.getElementById('save-score');
+const progressFill = document.getElementById('progress-fill');
+const roundDisplay = document.getElementById('round-display');
+const soilBarAfter = document.querySelector('.soil-bar::after'); // not used — we update inline
 
-// camera shake params
-let shakeStrength = 0;
-let lastCollectTime = 0;
+// Anim containers & sounds
+const rainContainer = document.getElementById('rain-container');
+const sparkleContainer = document.getElementById('sparkle-container');
+const irrigateSound = document.getElementById('sound-irrigate');
+const rainSound = document.getElementById('sound-rain');
+const cheerSound = document.getElementById('sound-cheer');
+const bgMusic = document.getElementById('bg-music');
+const musicToggle = document.getElementById('music-toggle');
 
-init();
+const helpBtn = document.getElementById('help-btn');
+const helpModal = document.getElementById('help-modal');
+const closeHelp = document.getElementById('close-help');
 
-function init(){
-  // renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.setClearColor(0x071826, 1);
-  container.appendChild(renderer.domElement);
+let score = 0;
+let round = 1;
+const totalRounds = 5;
+totalRoundsEl.textContent = totalRounds;
+roundEl.textContent = round;
 
-  // scene
-  scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x071826, 0.0007);
+let timer = 12; // seconds per round (adjust difficulty)
+let timerInterval = null;
+let simulatedData = { soil_moisture: 'low', soil_moisture_pct: 40, rainfall_forecast: 'none' };
+let musicPlaying = false;
+let leaderboardCache = [];
 
-  // camera
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2500);
-  camera.position.set(0, 60, 150);
-
-  // controls (kept for dev; but camera is controlled programmatically)
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enabled = false;
-
-  // lights
-  const hemi = new THREE.HemisphereLight(0xbfe8ff, 0x0b1b2b, 0.6);
-  scene.add(hemi);
-
-  const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-  sun.position.set(120, 200, 80);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -300;
-  sun.shadow.camera.right = 300;
-  sun.shadow.camera.top = 200;
-  sun.shadow.camera.bottom = -200;
-  scene.add(sun);
-
-  // subtle rim light
-  const rim = new THREE.DirectionalLight(0x99d9ff, 0.25);
-  rim.position.set(-100, 80, -200);
-  scene.add(rim);
-
-  // ground
-  const groundGeo = new THREE.PlaneGeometry(1400, 1400, 64, 64);
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x234f2a, roughness: 0.95 });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  // painted dirt paths (visual)
-  for (let i = 0; i < 8; i++){
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(1400, 40), new THREE.MeshStandardMaterial({ color: 0x2f3b1f, roughness: 1 }));
-    path.rotation.x = -Math.PI/2;
-    path.position.z = -300 + i * 80;
-    path.receiveShadow = true;
-    scene.add(path);
-  }
-
-  // water strip
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 24), new THREE.MeshStandardMaterial({
-    color: 0x0fa3ff, metalness: 0.2, roughness: 0.35, transparent: true, opacity: 0.85
-  }));
-  water.rotation.x = -Math.PI / 2;
-  water.position.set(-200, 0.2, -120);
-  scene.add(water);
-
-  // player / rover
-  createPlayer();
-
-  // particles system (for collection)
-  createParticlePool();
-
-  // event listeners
-  window.addEventListener('resize', onWindowResize);
-  document.addEventListener('keydown', e => keys[e.code] = true);
-  document.addEventListener('keyup', e => keys[e.code] = false);
-
-  startBtn.addEventListener('click', onStart);
-  resetBtn.addEventListener('click', onReset);
-
-  // initial UI
-  updateUI();
-  render(); // render single frame
+// ---------- helper: fetch backend endpoints ----------
+async function apiGet(path) {
+  try {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error('Network');
+    return await r.json();
+  } catch (err) { return null; }
 }
 
-function createPlayer(){
-  const group = new THREE.Group();
-
-  // body
-  const bodyGeo = new THREE.BoxGeometry(10, 4, 16);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe6eef2, metalness: 0.2, roughness: 0.4 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.castShadow = true;
-  body.position.y = 6;
-  group.add(body);
-
-  // cabin
-  const cabGeo = new THREE.BoxGeometry(8, 3, 6);
-  const cabMat = new THREE.MeshStandardMaterial({ color: 0x1e88ff, emissive: 0x003366, emissiveIntensity: 0.15 });
-  const cab = new THREE.Mesh(cabGeo, cabMat);
-  cab.position.set(0, 8, -1);
-  cab.castShadow = true;
-  group.add(cab);
-
-  // solar panel (animated tilt)
-  const panelGeo = new THREE.BoxGeometry(12, 0.4, 6);
-  const panelMat = new THREE.MeshStandardMaterial({ color: 0x0a4c6e, metalness: 0.6, roughness: 0.3 });
-  const panel = new THREE.Mesh(panelGeo, panelMat);
-  panel.position.set(0, 10.2, 4);
-  panel.castShadow = false;
-  group.add(panel);
-
-  // wheels
-  const wheelGeo = new THREE.CylinderGeometry(2.2, 2.2, 1.6, 16);
-  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.2 });
-  const offsets = [
-    [-5.3, 3, 6], [5.3, 3, 6],
-    [-5.3, 3, -6], [5.3, 3, -6]
-  ];
-  for (let i = 0; i < 4; i++){
-    const w = new THREE.Mesh(wheelGeo, wheelMat);
-    w.rotation.z = Math.PI / 2;
-    w.castShadow = true;
-    w.position.set(offsets[i][0], offsets[i][1], offsets[i][2]);
-    group.add(w);
-    wheels.push(w);
-  }
-
-  // tiny antenna
-  const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 6), new THREE.MeshStandardMaterial({ color: 0x222222 }));
-  ant.position.set(0, 13, -8);
-  group.add(ant);
-
-  group.position.set(0, 0, 60);
-  player = group;
-  player.userData = { speed: 0, forward: 0, turning: 0, panel };
-  scene.add(player);
-}
-
-function createParticlePool(){
-  // Points used for quick burst on collect
-  const max = 200;
-  const geom = new THREE.BufferGeometry();
-  const positions = new Float32Array(max * 3);
-  const colors = new Float32Array(max * 3);
-  const sizes = new Float32Array(max);
-  for (let i = 0; i < max * 3; i++){ positions[i] = 0; colors[i] = 1; }
-  for (let i = 0; i < max; i++) sizes[i] = 0;
-
-  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geom.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
-  geom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-  const mat = new THREE.PointsMaterial({ size: 2.5, vertexColors: true, transparent: true });
-  particles = new THREE.Points(geom, mat);
-  particles.userData = { max, pool: [] };
-  scene.add(particles);
-}
-
-function spawnCrops(n = 8){
-  const spread = 420;
-  for (let i = 0; i < n; i++){
-    const geo = new THREE.ConeGeometry(2.6, 6.2, 8);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x66ff88, roughness: 0.7 });
-    const crop = new THREE.Mesh(geo, mat);
-    crop.castShadow = true;
-    crop.position.set((Math.random() - 0.5) * spread, 3.1, (Math.random() - 0.5) * spread);
-    crop.userData = { swayPhase: Math.random() * Math.PI * 2 };
-    scene.add(crop);
-    crops.push(crop);
+// fetch NASA data (from backend)
+async function fetchNasaData() {
+  const data = await apiGet('/api/nasa-data');
+  if (data) simulatedData = data;
+  else {
+    simulatedData = {
+      soil_moisture: Math.random() > 0.5 ? 'low' : 'high',
+      soil_moisture_pct: Math.round(Math.random() * 100),
+      rainfall_forecast: Math.random() > 0.5 ? 'none' : 'heavy'
+    };
   }
 }
 
-function spawnBirds(n = 3){
-  for (let i = 0; i < n; i++){
-    const body = new THREE.Mesh(new THREE.SphereGeometry(2.6, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff6b6b, emissive: 0x220000 }));
-    const wingL = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.3, 1.6), new THREE.MeshStandardMaterial({ color: 0xff9b9b }));
-    const wingR = wingL.clone();
+// fetch NASA fact
+async function fetchNasaFact() {
+  const data = await apiGet('/api/nasa-fact');
+  if (data && data.fact) factTextEl.textContent = data.fact;
+  else factTextEl.textContent = "NASA monitors soil & precipitation from space — facts load when online.";
+}
 
-    body.add(wingL);
-    body.add(wingR);
-    wingL.position.set(-2.4, 0, 0);
-    wingR.position.set(2.4, 0, 0);
-
-    const x = (Math.random() - 0.5) * 400;
-    const z = (Math.random() - 0.5) * 400;
-    const y = 25 + Math.random() * 40;
-    const bird = new THREE.Group();
-    bird.add(body);
-    bird.position.set(x, y, z);
-    bird.userData = { baseY: y, speed: 6 + Math.random() * 6, dir: Math.random() < 0.5 ? 1 : -1, flapPhase: Math.random() * Math.PI * 2 };
-    birds.push(bird);
-    scene.add(bird);
+// fetch leaderboard
+async function fetchLeaderboard() {
+  const data = await apiGet('/api/leaderboard');
+  if (Array.isArray(data)) {
+    leaderboardCache = data;
+    renderLeaderboard();
+  } else {
+    // show localStorage fallback
+    const local = JSON.parse(localStorage.getItem('nasa_leaderboard') || '[]');
+    leaderboardCache = local;
+    renderLeaderboard();
   }
 }
 
-function resetLevel(){
-  // remove previous
-  crops.forEach(c => scene.remove(c));
-  birds.forEach(b => scene.remove(b));
-  crops = []; birds = [];
-
-  // spawn
-  spawnCrops(6 + level * 3);
-  spawnBirds(2 + Math.min(level, 7));
-  showMessage(`Level ${level} — Clear the crops!`);
-}
-
-function onStart(){
-  if (!playing){
-    playing = true;
-    score = 0;
-    level = 1;
-    energy = 100;
-    lastCollectTime = performance.now();
-    updateUI();
-    resetLevel();
-    animate();
+// save score to server (best-effort)
+async function saveScoreToServer(player = 'You') {
+  try {
+    await fetch('/api/save-score', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ player, score })
+    });
+  } catch (err) {
+    // fallback to localStorage
+    const local = JSON.parse(localStorage.getItem('nasa_leaderboard') || '[]');
+    local.push({ player, score, date: new Date().toISOString() });
+    localStorage.setItem('nasa_leaderboard', JSON.stringify(local));
   }
 }
 
-function onReset(){
-  // remove objects
-  crops.forEach(c => scene.remove(c));
-  birds.forEach(b => scene.remove(b));
-  crops = []; birds = [];
-  score = 0; level = 1; energy = 100; playing = false;
-  updateUI();
-  showMessage('Game reset. Click Start to play!');
-}
-
-function updateUI(){
-  levelEl.innerText = level;
-  scoreEl.innerText = score;
-  energyEl.innerText = Math.max(0, Math.round(energy));
-}
-
-function showMessage(txt, ttl = 2500){
-  messageEl.innerText = txt || '';
-  if (ttl > 0) {
-    setTimeout(() => { if (messageEl.innerText === txt) messageEl.innerText = ''; }, ttl);
+// render leaderboard
+function renderLeaderboard() {
+  leaderboardList.innerHTML = '';
+  if (!leaderboardCache.length) {
+    leaderboardList.innerHTML = '<li>No scores yet</li>';
+    return;
   }
-}
-
-// core loop
-function animate(){
-  if (!playing) return;
-  requestAnimationFrame(animate);
-  const dt = Math.min(0.05, clock.getDelta());
-  update(dt);
-  render();
-}
-
-function update(dt){
-  // player control: smooth acceleration
-  const maxSpeed = 60 + level * 4;
-  const accel = 80;
-  let moveForward = 0;
-  if (keys['ArrowUp'] || keys['KeyW']) moveForward = 1;
-  if (keys['ArrowDown'] || keys['KeyS']) moveForward = -0.6;
-  // turning
-  let turn = 0;
-  if (keys['ArrowLeft'] || keys['KeyA']) turn = 1;
-  if (keys['ArrowRight'] || keys['KeyD']) turn = -1;
-
-  // update speed & turning state
-  player.userData.speed += (moveForward * maxSpeed - player.userData.speed) * Math.min(1, accel * dt / maxSpeed);
-  player.userData.turning = turn;
-
-  // apply movement
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
-  player.position.addScaledVector(forward, player.userData.speed * dt);
-
-  // turning rotates the player
-  player.rotation.y += turn * 1.5 * dt * (0.6 + Math.abs(player.userData.speed) / maxSpeed);
-
-  // wheel rotation visual based on speed
-  const wheelRot = (player.userData.speed * dt) / 0.8;
-  wheels.forEach(w => w.rotation.x -= wheelRot);
-
-  // panel gentle animation
-  player.userData.panel.rotation.x = Math.sin(performance.now() * 0.002) * 0.06;
-
-  // crops sway animation
-  const t = performance.now() * 0.001;
-  crops.forEach(c => {
-    c.rotation.z = Math.sin(t * 2 + c.userData.swayPhase) * 0.12;
-    c.position.y = 2.9 + Math.sin(t * 1.4 + c.userData.swayPhase) * 0.12;
+  const top = leaderboardCache.slice(0,10);
+  top.forEach(item => {
+    const li = document.createElement('li');
+    li.textContent = `${item.player} — ${item.score}`;
+    leaderboardList.appendChild(li);
   });
+}
 
-  // birds movement & flap
-  birds.forEach(b => {
-    b.userData.flapPhase += dt * 12;
-    const body = b.children[0];
-    const wingL = body.children[0], wingR = body.children[1];
-    const flap = Math.sin(b.userData.flapPhase) * 0.8 + 1.2;
-    wingL.scale.y = 0.5 + Math.abs(Math.sin(b.userData.flapPhase)) * 1.4;
-    wingR.scale.y = wingL.scale.y;
-    // simple horizontal patrol
-    b.position.x += b.userData.speed * 0.02 * b.userData.dir;
-    b.position.y = b.userData.baseY + Math.sin(performance.now() * 0.002 + b.userData.flapPhase) * 3;
-    // wrap around
-    if (b.position.x > 700) b.position.x = -700;
-    if (b.position.x < -700) b.position.x = 700;
-  });
+// ---------- UI updates ----------
+function updateUIFromData() {
+  soilMoistureEl.textContent = simulatedData.soil_moisture === 'low' ? 'Low' : 'High';
+  soilPctEl.textContent = `${simulatedData.soil_moisture_pct ?? 50}%`;
+  rainfallEl.textContent = simulatedData.rainfall_forecast === 'heavy' ? 'Heavy' : 'None';
 
-  // collisions: player <-> crops
-  for (let i = crops.length - 1; i >= 0; i--){
-    const c = crops[i];
-    const dist = player.position.distanceTo(c.position);
-    if (dist < 8){
-      // collect
-      collectCrop(c);
-      crops.splice(i, 1);
+  // update soil bar width
+  const pct = simulatedData.soil_moisture_pct ?? 50;
+  const soilBar = document.querySelector('.soil-bar');
+  if (soilBar) soilBar.style.setProperty('--pct', `${pct}%`);
+  // we'll update using inline style
+  const sbAfter = soilBar;
+  // update CSS pseudo fallback: we'll place a direct inner overlay for width
+  let overlay = document.getElementById('soil-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div'); overlay.id = 'soil-overlay';
+    overlay.style.position='absolute';
+    overlay.style.left='12px';
+    overlay.style.bottom='12px';
+    overlay.style.height='12px';
+    overlay.style.width = `calc(${pct}% - 24px)`;
+    overlay.style.background='linear-gradient(90deg,#77decb,#00c6ff)';
+    overlay.style.borderRadius='8px';
+    overlay.style.zIndex='5';
+    document.querySelector('.farm-card').appendChild(overlay);
+  } else {
+    overlay.style.width = `calc(${pct}% - 24px)`;
+  }
+
+  roundDisplay.textContent = `${round}/${totalRounds}`;
+  progressFill.style.width = `${((round-1)/totalRounds)*100}%`;
+  scoreEl.textContent = score;
+}
+
+// ---------- Animations ----------
+function startRain() {
+  rainContainer.innerHTML = '';
+  for (let i=0;i<30;i++){
+    const drop = document.createElement('div');
+    drop.className='raindrop';
+    drop.style.left = `${Math.random()*100}vw`;
+    drop.style.animationDuration = `${0.7 + Math.random()}s`;
+    rainContainer.appendChild(drop);
+  }
+  try { rainSound.currentTime=0; rainSound.play(); } catch(e){}
+}
+function stopRain(){ rainContainer.innerHTML=''; try{ rainSound.pause(); rainSound.currentTime=0 }catch(e){} }
+
+function showSparkles(x,y){
+  for(let i=0;i<6;i++){
+    const s = document.createElement('div'); s.className='sparkle'; s.textContent='✨';
+    const dx = (Math.random()*80)-40; const dy=(Math.random()*80)-40;
+    s.style.left = `${x+dx}px`; s.style.top = `${y+dy}px`;
+    sparkleContainer.appendChild(s);
+    setTimeout(()=>s.remove(),900);
+  }
+}
+function shakeCrop(){ cropEl.classList.add('shake'); setTimeout(()=>cropEl.classList.remove('shake'),600); }
+
+// floating icons for visual interest
+function showFloatingIcons(){
+  const container = document.getElementById('floating-icons');
+  container.innerHTML='';
+  const icons = ['☀️','🌧️','🛰️','💧','🌱'];
+  for(let i=0;i<8;i++){
+    const el = document.createElement('div');
+    el.textContent = icons[Math.floor(Math.random()*icons.length)];
+    el.style.position='absolute';
+    el.style.left = `${Math.random()*70+10}%`;
+    el.style.top = `${Math.random()*70+5}%`;
+    el.style.opacity = (0.2+Math.random()*0.6);
+    el.style.transform = `scale(${0.8 + Math.random()*0.6})`;
+    el.style.transition = `transform 4s ease-in-out`;
+    container.appendChild(el);
+    setInterval(()=>{ el.style.transform = `translateY(${(Math.random()*10)-5}px) scale(${0.9 + Math.random()*0.4})` }, 3000 + Math.random()*2000);
+  }
+}
+
+// ---------- Gameplay ----------
+async function startRound() {
+  // reset
+  resultMessageEl.textContent = '';
+  cropEl.textContent = '❓';
+  // fetch data & fact
+  await fetchNasaData();
+  await fetchNasaFact();
+  updateUIFromData();
+  showFloatingIcons();
+
+  // rain effect
+  if (simulatedData.rainfall_forecast === 'heavy') startRain();
+  else stopRain();
+
+  // start timer
+  timer = 12; // or set by difficulty
+  const timerEl = document.getElementById('timer') || (() => {
+    const el = document.createElement('span'); el.id='timer'; el.textContent=timer; instructionsEl.appendChild(el); return el;
+  })();
+  timerEl.textContent = timer;
+  clearInterval(timerInterval);
+  timerInterval = setInterval(()=>{
+    timer--;
+    timerEl.textContent = timer;
+    if (timer <= 0) {
+      clearInterval(timerInterval);
+      onTimeout();
     }
-  }
-
-  // collisions: player <-> birds
-  for (let i = 0; i < birds.length; i++){
-    const b = birds[i];
-    const dist = player.position.distanceTo(b.position);
-    if (dist < 10){
-      // hit
-      onBirdHit();
-    }
-  }
-
-  // level progress
-  if (crops.length === 0){
-    level++;
-    if (level > maxLevel){
-      showMessage(`🎉 You completed all levels! Score: ${score}`, 6000);
-      playing = false;
-    } else {
-      showMessage(`Level up! ${level}`, 2000);
-      resetLevel();
-    }
-  }
-
-  // energy drain slowly when moving
-  if (Math.abs(player.userData.speed) > 2){
-    energy -= 6 * dt;
-    energy = Math.max(0, energy);
-    if (energy === 0){
-      showMessage('Energy depleted! Press Reset to restart.', 3000);
-      playing = false;
-    }
-  }
-
-  // particle TTL decay (simple)
-  updateParticles(dt);
-
-  // camera smoothing and optional shake
-  const camTarget = new THREE.Vector3(player.position.x, player.position.y + 34, player.position.z + 92);
-  camera.position.lerp(camTarget, 0.12);
-  camera.lookAt(new THREE.Vector3(player.position.x, player.position.y + 6, player.position.z));
-
-  // shake
-  if (shakeStrength > 0.01){
-    const s = shakeStrength;
-    camera.position.x += (Math.random() - 0.5) * s;
-    camera.position.y += (Math.random() - 0.5) * s;
-    shakeStrength *= 0.92;
-  }
-
-  // update UI
-  updateUI();
+  },1000);
 }
 
-function collectCrop(crop){
-  // show burst
-  burstParticles(crop.position, 80, 0x9effa6);
-  // reward
-  score += 12 + Math.floor(level * 1.5);
-  // small energy boost
-  energy = Math.min(120, energy + 6);
-  lastCollectTime = performance.now();
+function onTimeout(){
+  // treat as wrong (no action)
+  resultMessageEl.textContent = '⏳ Time up! You missed the chance — crops affected.';
+  resultMessageEl.style.color = '#b54';
+  cropEl.textContent = '💀';
+  shakeCrop();
+  nextRound();
 }
 
-function onBirdHit(){
-  // shake camera, small penalty
-  shakeStrength = Math.max(shakeStrength, 3.6 + level * 0.6);
-  score = Math.max(0, score - 8);
-  energy = Math.max(0, energy - 12);
-  showMessage('Hit by bird! -8 score', 1200);
-}
-
-function burstParticles(pos, count = 50, hex = 0xffffff){
-  // write into particle buffer for quick bursts
-  if (!particles) return;
-  const geom = particles.geometry;
-  const positions = geom.attributes.position.array;
-  const colors = geom.attributes.customColor.array;
-  const sizes = geom.attributes.size.array;
-  const max = particles.userData.max;
-  const now = performance.now() * 0.001;
-  let spawned = 0;
-  for (let i = 0; i < max && spawned < count; i++){
-    const si = i * 3;
-    if (sizes[i] <= 0.001){ // free slot
-      // random velocity
-      positions[si] = pos.x + (Math.random() - 0.5) * 4;
-      positions[si + 1] = pos.y + (Math.random() - 0.5) * 4;
-      positions[si + 2] = pos.z + (Math.random() - 0.5) * 4;
-      // color
-      const c = new THREE.Color(hex);
-      colors[si] = c.r;
-      colors[si + 1] = c.g;
-      colors[si + 2] = c.b;
-      sizes[i] = 3 + Math.random() * 3;
-      // store velocity in userData pool
-      particles.userData.pool[i] = {
-        vel: new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() * 6) + 2, (Math.random() - 0.5) * 8),
-        ttl: 0.9 + Math.random() * 0.7
-      };
-      spawned++;
-    }
+function evaluateIrrigate() {
+  irrigateSound.currentTime=0; try{irrigateSound.play()}catch(e){}
+  clearInterval(timerInterval);
+  if (simulatedData.soil_moisture === 'low' && simulatedData.rainfall_forecast === 'none') {
+    resultMessageEl.textContent = '✅ Correct — crops flourish!';
+    resultMessageEl.style.color = 'green';
+    cropEl.textContent = '🌱';
+    const rect = cropEl.getBoundingClientRect();
+    showSparkles(rect.left + rect.width/2, rect.top + rect.height/2);
+    score += 1;
+    achievement('Waterwise!');
+  } else {
+    resultMessageEl.textContent = '❌ Wrong — overwatering harms the crop.';
+    resultMessageEl.style.color = 'red';
+    cropEl.textContent = '💀';
+    shakeCrop();
   }
-  geom.attributes.position.needsUpdate = true;
-  geom.attributes.customColor.needsUpdate = true;
-  geom.attributes.size.needsUpdate = true;
+  nextRound();
 }
 
-function updateParticles(dt){
-  if (!particles) return;
-  const geom = particles.geometry;
-  const positions = geom.attributes.position.array;
-  const colors = geom.attributes.customColor.array;
-  const sizes = geom.attributes.size.array;
-  const pool = particles.userData.pool;
-  const max = particles.userData.max;
-
-  for (let i = 0; i < max; i++){
-    if (sizes[i] > 0.001 && pool[i]){
-      const si = i * 3;
-      // lifetime decay
-      pool[i].ttl -= dt;
-      // apply velocity
-      positions[si] += pool[i].vel.x * dt;
-      positions[si + 1] += pool[i].vel.y * dt;
-      positions[si + 2] += pool[i].vel.z * dt;
-      // gravity
-      pool[i].vel.y -= 18 * dt;
-      // shrink
-      sizes[i] *= 0.95;
-      if (pool[i].ttl <= 0 || sizes[i] < 0.2){
-        sizes[i] = 0;
-        pool[i] = null;
-        // fade color to black (optional)
-        colors[si] = colors[si + 1] = colors[si + 2] = 0;
-      }
-    }
+function evaluateDoNotIrrigate() {
+  clearInterval(timerInterval);
+  if (simulatedData.soil_moisture === 'high' || simulatedData.rainfall_forecast === 'heavy') {
+    resultMessageEl.textContent = '✅ Correct — saved water & crop safe!';
+    resultMessageEl.style.color = 'green';
+    cropEl.textContent = '🌱';
+    const rect = cropEl.getBoundingClientRect();
+    showSparkles(rect.left + rect.width/2, rect.top + rect.height/2);
+    score += 1;
+    achievement('Eco Saver!');
+  } else {
+    resultMessageEl.textContent = '❌ Wrong — crop dried out.';
+    resultMessageEl.style.color = 'red';
+    cropEl.textContent = '💀';
+    shakeCrop();
   }
-  geom.attributes.position.needsUpdate = true;
-  geom.attributes.size.needsUpdate = true;
-  geom.attributes.customColor.needsUpdate = true;
+  nextRound();
 }
 
-function onWindowResize(){
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+function achievement(text) {
+  const el = document.getElementById('achievement');
+  el.textContent = `🏅 ${text}`;
+  setTimeout(()=>el.textContent='',1500);
 }
 
-function render(){
-  renderer.render(scene, camera);
-}
-
-// Start an initial render loop when game playing
-function animateStarter(){
-  // always animate scene while idle for ambience
-  requestAnimationFrame(animateStarter);
-  const dt = Math.min(0.05, clock.getDelta());
-  // small ambient motion for panels
-  if (player && player.userData && player.userData.panel) {
-    player.userData.panel.rotation.x = Math.sin(performance.now() * 0.0012) * 0.04;
+function nextRound() {
+  round++;
+  progressFill.style.width = `${((round-1)/totalRounds)*100}%`;
+  if (round > totalRounds) {
+    endGame();
+  } else {
+    setTimeout(()=>startRound(), 1400);
   }
-  // birds idle flap if not started
-  birds.forEach(b => {
-    if (!b.userData) return;
-    b.userData.flapPhase += dt * 8;
-    const body = b.children[0];
-    const wingL = body.children[0], wingR = body.children[1];
-    wingL.scale.y = 0.6 + Math.abs(Math.sin(b.userData.flapPhase)) * 0.7;
-    wingR.scale.y = wingL.scale.y;
-    b.position.y = b.userData.baseY + Math.sin(performance.now() * 0.001 + b.userData.flapPhase) * 2;
-  });
-  // gentle render
-  renderer.render(scene, camera);
 }
 
-// kick off background ambient birds/camera when not playing
-animateStarter();
+async function endGame() {
+  clearInterval(timerInterval);
+  document.getElementById('instructions').textContent = `🎉 Game Over — Score ${score}/${totalRounds}`;
+  irrigateBtn.disabled=true; donotIrrigateBtn.disabled=true;
+  try{cheerSound.currentTime=0; cheerSound.play();}catch(e){}
+  // save to UI-local and backend
+  await saveScoreToServer('Binary Brains'); // replace with actual player name
+  await fetchLeaderboard();
+  // show restart control
+  const restartBtn = document.createElement('button'); restartBtn.className='primary restart-btn'; restartBtn.textContent='🔄 Play Again';
+  restartBtn.onclick = ()=>{ score=0; round=1; irrigateBtn.disabled=false; donotIrrigateBtn.disabled=false; progressFill.style.width='0%'; roundEl.textContent=1; scoreEl.textContent=0; restartBtn.remove(); startRound();};
+  resultMessageEl.appendChild(document.createElement('br'));
+  resultMessageEl.appendChild(restartBtn);
+}
 
-// helper: small demo content when idle
-(function idlePopulate(){
-  // only add crops & birds visually for idle view
-  spawnCrops(12);
-  spawnBirds(5);
-})();
+// ---------- interactions ----------
+irrigateBtn.addEventListener('click', evaluateIrrigate);
+donotIrrigateBtn.addEventListener('click', evaluateDoNotIrrigate);
+saveScoreBtn.addEventListener('click', async ()=>{
+  await saveScoreToServer(prompt('Enter your name', 'Player'));
+  await fetchLeaderboard();
+});
 
+musicToggle.addEventListener('click', ()=>{
+  if (musicPlaying) { bgMusic.pause(); musicPlaying=false; musicToggle.textContent='🎵'; }
+  else { try{ bgMusic.play(); }catch(e){} musicPlaying=true; musicToggle.textContent='🔇'; }
+});
+
+// help modal
+helpBtn.addEventListener('click', ()=>{ helpModal.setAttribute('aria-hidden','false') });
+closeHelp.addEventListener('click', ()=>{ helpModal.setAttribute('aria-hidden','true') });
+
+// Learn more button — opens NASA fact modal or external link
+learnMoreBtn.addEventListener('click', ()=> {
+  window.open('https://earthdata.nasa.gov/', '_blank');
+});
+
+// init
+async function init() {
+  await fetchLeaderboard();
+  await startRound();
+}
+document.addEventListener('DOMContentLoaded', init);

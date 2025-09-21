@@ -2,29 +2,108 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>NASA Farm Navigator 3D — Enhanced</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NASA Farm Navigators — Advanced Prototype</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="container"></div>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">🌍 <strong>NASA Farm Navigators</strong></div>
+      <div class="controls">
+        <button id="help-btn" class="icon-btn" aria-label="Help">❓</button>
+        <button id="music-toggle" class="icon-btn" aria-pressed="false" title="Toggle background music">🎵</button>
+      </div>
+    </header>
 
-  <div id="ui">
-    <div class="row"><strong>Level:</strong> <span id="level">1</span></div>
-    <div class="row"><strong>Score:</strong> <span id="score">0</span></div>
-    <div class="row"><strong>Energy:</strong> <span id="energy">100</span></div>
-    <div class="controls">
-      <button id="startBtn">Start</button>
-      <button id="resetBtn">Reset</button>
-    </div>
-    <div id="message" class="message"></div>
+    <main class="main-grid">
+      <section class="left-panel">
+        <div class="farm-card">
+          <div id="farm-field" aria-hidden="true">
+            <div id="floating-icons"></div>
+            <div id="crop" aria-live="polite">❓</div>
+            <div id="soil-bar" class="soil-bar" title="Soil moisture"></div>
+          </div>
+          <div class="progress-row">
+            <div class="progress-label">Progress</div>
+            <div class="progress">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div id="round-display" class="round-display">1/5</div>
+          </div>
+          <div id="achievement" class="achievement" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <aside class="right-panel" role="region" aria-label="Game panel">
+        <div class="panel card">
+          <h3>📊 NASA Data</h3>
+          <div class="data-row"><span>🌱 Soil:</span> <span id="soil-moisture">Loading...</span></div>
+          <div class="data-row"><span>💧 Moisture:</span> <span id="soil-pct">--%</span></div>
+          <div class="data-row"><span>🌧️ Forecast:</span> <span id="rainfall">Loading...</span></div>
+
+          <h4>📝 Instructions</h4>
+          <p id="instructions">Decide: irrigate or not. You have <span id="timer">10</span>s each round.</p>
+
+          <div class="button-row">
+            <button id="irrigate-btn" class="primary">💧 Irrigate</button>
+            <button id="donot-irrigate-btn" class="secondary">🚫 Do Not Irrigate</button>
+          </div>
+
+          <div id="result-message" class="result"></div>
+
+          <div class="score-board">
+            <div>⭐ Score: <strong id="score">0</strong></div>
+            <div>📍 Round: <strong id="round">1</strong>/<span id="total-rounds">5</span></div>
+          </div>
+
+          <div class="nasa-info card" id="nasa-info" tabindex="0">
+            <strong>🌌 NASA Fact</strong>
+            <div id="fact-text">Loading interesting fact...</div>
+            <button id="learn-more" class="link-btn">Learn more</button>
+          </div>
+
+          <div class="leaderboard card" id="leaderboard-card">
+            <strong>🏆 Leaderboard</strong>
+            <ol id="leaderboard-list"><li>—</li></ol>
+            <button id="save-score" class="small-btn">Save my score</button>
+          </div>
+
+        </div>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <div>Built for NASA Space Challenge — Prototype by Binary Brains</div>
+    </footer>
   </div>
 
-  <!-- Three.js + OrbitControls -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+  <!-- Modals & animations -->
+  <div id="rain-container"></div>
+  <div id="sparkle-container"></div>
 
-  <!-- Game -->
-  <script src="game.js"></script>
+  <!-- Audio -->
+  <audio id="sound-irrigate" src="https://www.soundjay.com/button/sounds/button-16.mp3"></audio>
+  <audio id="sound-rain" src="https://www.soundjay.com/nature/sounds/rain-01.mp3"></audio>
+  <audio id="sound-cheer" src="https://www.soundjay.com/human/sounds/applause-01.mp3"></audio>
+  <audio id="bg-music" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
+
+  <!-- Help modal (simple) -->
+  <div id="help-modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-content">
+      <h2>How to play</h2>
+      <ul>
+        <li>Each round you get soil moisture and rainfall forecast.</li>
+        <li>If soil is <strong>low</strong> and no rain, press <em>Irrigate</em>.</li>
+        <li>If soil is <strong>high</strong> or heavy rain is forecast, press <em>Do Not Irrigate</em>.</li>
+        <li>You have a timer each round — earn points for correct decisions.</li>
+      </ul>
+      <h3>Educational</h3>
+      <p>NASA satellites (eg. SMAP, GPM) observe soil and precipitation — this prototype simulates how that data guides irrigation.</p>
+      <button id="close-help" class="primary">Close</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
