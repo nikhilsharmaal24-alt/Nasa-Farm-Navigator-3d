@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NASA Farm Navigator 3D — Enhanced</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="container"></div>
+
+  <div id="ui">
+    <div class="row"><strong>Level:</strong> <span id="level">1</span></div>
+    <div class="row"><strong>Score:</strong> <span id="score">0</span></div>
+    <div class="row"><strong>Energy:</strong> <span id="energy">100</span></div>
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+    <div id="message" class="message"></div>
+  </div>
+
+  <!-- Three.js + OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- Game -->
+  <script src="game.js"></script>
+</body>
+</html>

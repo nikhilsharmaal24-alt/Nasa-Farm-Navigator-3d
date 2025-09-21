@@ -1,0 +1,52 @@
+/* Basic layout */
+* { box-sizing: border-box; }
+html,body { height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:linear-gradient(#04121f,#071827); color:#fff; }
+
+#container {
+  width:100%;
+  height:100vh;
+  display:block;
+}
+
+/* UI */
+#ui {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 20;
+  background: rgba(6,12,20,0.5);
+  padding: 12px;
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  min-width: 180px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+}
+
+#ui .row { margin-bottom: 8px; font-size: 15px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+#ui .controls { display:flex; gap:8px; margin-top:6px; }
+#startBtn, #resetBtn {
+  padding:6px 10px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  font-weight:600;
+  color:#06202b;
+}
+#startBtn { background: #52c7ff; }
+#startBtn:hover { background: #34b3ff; }
+#resetBtn { background: #ffd166; }
+#resetBtn:hover { background: #ffc34a; }
+
+.message {
+  margin-top:10px;
+  padding:6px 8px;
+  background: rgba(0,0,0,0.25);
+  border-radius:6px;
+  font-size:13px;
+  min-height:26px;
+}
+
+/* small responsive tweak */
+@media (max-width:640px){
+  #ui { left: 8px; top: 8px; font-size: 14px; min-width: 140px; }
+}
