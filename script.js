@@ -35,7 +35,7 @@ const closeHelp = document.getElementById('close-help');
 
 let score = 0;
 let round = 1;
-const totalRounds = 5;
+const totalRounds = 10;
 totalRoundsEl.textContent = totalRounds;
 roundEl.textContent = round;
 
