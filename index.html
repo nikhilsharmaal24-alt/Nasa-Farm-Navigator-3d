@@ -2,108 +2,540 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <title>Farm Sustainability Game — Ready to Play</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>NASA Farm Navigators — Advanced Prototype</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg1: #e8f8ee;
+      --bg2: #b7e4c7;
+      --accent: #2d7a2d;
+      --muted: #4b4b4b;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, system-ui, Arial, sans-serif;
+      background: linear-gradient(180deg,var(--bg1),var(--bg2));
+      color:var(--muted);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      min-height:100vh;
+      padding:18px;
+    }
+
+    header{ width:100%; max-width:1000px; display:flex; justify-content:space-between; align-items:center; gap:12px;}
+    h1{ margin:8px 0; color:var(--accent); font-size:20px;}
+    .controls-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+    /* Farm grid */
+    #farm {
+      display:grid;
+      grid-template-columns: repeat(3, 120px);
+      grid-auto-rows: 120px;
+      gap:12px;
+      margin:18px 0;
+    }
+    .plot {
+      background: linear-gradient(180deg,#fff,#f2fff2);
+      border: 3px solid rgba(0,0,0,0.06);
+      border-radius:12px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      transition: transform .15s ease, box-shadow .15s;
+      user-select:none;
+      padding:8px;
+      text-align:center;
+    }
+    .plot:hover { transform: translateY(-4px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+    .plot .emoji { font-size:36px; }
+    .plot .mini { font-size:12px; color:#666; margin-top:6px; }
+
+    .plot.selected {
+      outline: 3px solid #3aa33a;
+      box-shadow: 0 8px 22px rgba(58,163,58,0.12);
+      transform: translateY(-6px) scale(1.02);
+    }
+
+    /* Info panel */
+    #info {
+      width:100%;
+      max-width:1000px;
+      display:flex;
+      gap:18px;
+      align-items:flex-start;
+      justify-content:space-between;
+      margin-bottom:18px;
+      flex-wrap:wrap;
+    }
+    .card {
+      background:white;
+      border-radius:12px;
+      padding:12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+    }
+    #leftCard{ flex:1; min-width:260px; }
+    #rightCard{ width:420px; min-width:280px; }
+
+    #sustainabilityBar {
+      height:12px;
+      width:100%;
+      background:#eee;
+      border-radius:999px;
+      overflow:hidden;
+      margin-top:8px;
+    }
+    #sustainInner {
+      height:100%;
+      width:50%;
+      background: linear-gradient(90deg,#56ab2f,#a8e063);
+    }
+
+    #toast {
+      position: fixed;
+      left:50%;
+      bottom:24px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.82);
+      color:white;
+      padding:10px 16px;
+      border-radius:10px;
+      font-weight:600;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .25s ease, transform .25s;
+      z-index:999;
+    }
+    #toast.show { opacity:1; pointer-events:auto; transform: translateX(-50%) translateY(-6px); }
+
+    /* End screen overlay */
+    #endScreen {
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background: rgba(0,0,0,0.6);
+      z-index:1000;
+    }
+    #endContent {
+      background:white;
+      padding:22px;
+      border-radius:12px;
+      text-align:center;
+      width:90%;
+      max-width:520px;
+    }
+
+    /* small UI */
+    button.btn{
+      padding:10px 14px;
+      border-radius:10px;
+      border:none;
+      cursor:pointer;
+      font-weight:600;
+      background:var(--accent);
+      color:white;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+    }
+    button.ghost{
+      background:transparent;
+      border:1px solid rgba(0,0,0,0.06);
+      color:var(--muted);
+    }
+    #ndviChart{ width:100% !important; max-width:800px; height:260px !important; border-radius:8px; }
+
+    /* responsive */
+    @media (max-width:900px){
+      #farm { grid-template-columns: repeat(3, 90px); grid-auto-rows:90px; }
+      .plot { padding:6px; }
+      #rightCard{ width:100%; max-width:none; }
+    }
+  </style>
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="brand">🌍 <strong>NASA Farm Navigators</strong></div>
-      <div class="controls">
-        <button id="help-btn" class="icon-btn" aria-label="Help">❓</button>
-        <button id="music-toggle" class="icon-btn" aria-pressed="false" title="Toggle background music">🎵</button>
+  <header>
+    <h1>🌿 Farm Sustainability — Ready to Play</h1>
+    <div class="controls-row">
+      <div id="dayCounter" style="font-weight:700;color:#3b7a3b">Day 5</div>
+      <div id="scoreText" style="font-weight:700">Sustainability: 50</div>
+    </div>
+  </header>
+
+  <div id="info" >
+    <div id="leftCard" class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <strong id="selectedLabel">No plot selected</strong>
+          <div id="plotDetails" style="font-size:13px;color:#666;margin-top:6px;">Click any plot to view details.</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:12px;color:#666">Sustainability</div>
+          <div id="sustainabilityBar" title="Sustainability score">
+            <div id="sustainInner"></div>
+          </div>
+        </div>
       </div>
-    </header>
 
-    <main class="main-grid">
-      <section class="left-panel">
-        <div class="farm-card">
-          <div id="farm-field" aria-hidden="true">
-            <div id="floating-icons"></div>
-            <div id="crop" aria-live="polite">❓</div>
-            <div id="soil-bar" class="soil-bar" title="Soil moisture"></div>
-          </div>
-          <div class="progress-row">
-            <div class="progress-label">Progress</div>
-            <div class="progress">
-              <div id="progress-fill" class="progress-fill"></div>
-            </div>
-            <div id="round-display" class="round-display">1/5</div>
-          </div>
-          <div id="achievement" class="achievement" aria-hidden="true"></div>
-        </div>
-      </section>
+      <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+        <button class="btn" onclick="irrigate()">💧 Irrigate</button>
+        <button class="btn" onclick="fertilize()">🌱 Fertilize</button>
+        <button class="ghost" onclick="advanceDay()">⏭ Advance Day</button>
+        <button class="ghost" onclick="harvest()">🌾 Harvest</button>
+      </div>
 
-      <aside class="right-panel" role="region" aria-label="Game panel">
-        <div class="panel card">
-          <h3>📊 NASA Data</h3>
-          <div class="data-row"><span>🌱 Soil:</span> <span id="soil-moisture">Loading...</span></div>
-          <div class="data-row"><span>💧 Moisture:</span> <span id="soil-pct">--%</span></div>
-          <div class="data-row"><span>🌧️ Forecast:</span> <span id="rainfall">Loading...</span></div>
+      <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+        <button class="ghost" onclick="startGame()">Hide Tutorial</button>
+        <button class="ghost" onclick="restartGame()">Restart</button>
+      </div>
 
-          <h4>📝 Instructions</h4>
-          <p id="instructions">Decide: irrigate or not. You have <span id="timer">10</span>s each round.</p>
+      <div id="tutorial" style="margin-top:12px;background:#f8fff8;padding:10px;border-radius:8px;color:#444;font-size:13px;">
+        Hint: select a plot → irrigate/fertilize to raise NDVI & sustainability. Advance days to see natural changes.
+      </div>
+    </div>
 
-          <div class="button-row">
-            <button id="irrigate-btn" class="primary">💧 Irrigate</button>
-            <button id="donot-irrigate-btn" class="secondary">🚫 Do Not Irrigate</button>
-          </div>
-
-          <div id="result-message" class="result"></div>
-
-          <div class="score-board">
-            <div>⭐ Score: <strong id="score">0</strong></div>
-            <div>📍 Round: <strong id="round">1</strong>/<span id="total-rounds">5</span></div>
-          </div>
-
-          <div class="nasa-info card" id="nasa-info" tabindex="0">
-            <strong>🌌 NASA Fact</strong>
-            <div id="fact-text">Loading interesting fact...</div>
-            <button id="learn-more" class="link-btn">Learn more</button>
-          </div>
-
-          <div class="leaderboard card" id="leaderboard-card">
-            <strong>🏆 Leaderboard</strong>
-            <ol id="leaderboard-list"><li>—</li></ol>
-            <button id="save-score" class="small-btn">Save my score</button>
-          </div>
-
-        </div>
-      </aside>
-    </main>
-
-    <footer class="footer">
-      <div>Built for NASA Space Challenge — Prototype by Binary Brains</div>
-    </footer>
-  </div>
-
-  <!-- Modals & animations -->
-  <div id="rain-container"></div>
-  <div id="sparkle-container"></div>
-
-  <!-- Audio -->
-  <audio id="sound-irrigate" src="https://www.soundjay.com/button/sounds/button-16.mp3"></audio>
-  <audio id="sound-rain" src="https://www.soundjay.com/nature/sounds/rain-01.mp3"></audio>
-  <audio id="sound-cheer" src="https://www.soundjay.com/human/sounds/applause-01.mp3"></audio>
-  <audio id="bg-music" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
-
-  <!-- Help modal (simple) -->
-  <div id="help-modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal-content">
-      <h2>How to play</h2>
-      <ul>
-        <li>Each round you get soil moisture and rainfall forecast.</li>
-        <li>If soil is <strong>low</strong> and no rain, press <em>Irrigate</em>.</li>
-        <li>If soil is <strong>high</strong> or heavy rain is forecast, press <em>Do Not Irrigate</em>.</li>
-        <li>You have a timer each round — earn points for correct decisions.</li>
-      </ul>
-      <h3>Educational</h3>
-      <p>NASA satellites (eg. SMAP, GPM) observe soil and precipitation — this prototype simulates how that data guides irrigation.</p>
-      <button id="close-help" class="primary">Close</button>
+    <div id="rightCard" class="card">
+      <canvas id="ndviChart"></canvas>
     </div>
   </div>
 
-  <script src="script.js"></script>
+  <div id="farm" aria-label="Farm plots"></div>
+
+  <div id="toast"></div>
+
+  <div id="endScreen">
+    <div id="endContent">
+      <h2 id="endMessage">Game Over</h2>
+      <p id="endSub" style="color:#555">Message</p>
+      <div style="margin-top:12px;">
+        <button class="btn" onclick="restartGame()">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- Game State & Helpers ---------- */
+const NUM_PLOTS = 9;
+const INITIAL_SUSTAIN = 50;
+const HISTORY_DAYS = 5; // starting history length
+let dayCount = HISTORY_DAYS;
+let sustainability = INITIAL_SUSTAIN;
+let selectedPlot = null;
+let plots = []; // each: { ndviHistory: [..], soil: number, emoji: '🌾' or others, harvested:boolean }
+let chart = null;
+let toastTimer = null;
+let gameEnded = false;
+
+// clamp helper
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------- Initialization ---------- */
+function randomBaseNDVI() {
+  // random base between 0.2 and 0.6
+  return +(Math.random() * 0.4 + 0.2).toFixed(2);
+}
+
+function seedPlots() {
+  plots = [];
+  for (let i=0;i<NUM_PLOTS;i++){
+    const base = randomBaseNDVI();
+    // generate HISTORY_DAYS entries with small random walk
+    const hist = [];
+    let cur = base;
+    for (let d=0; d<HISTORY_DAYS; d++){
+      cur = clamp( +(cur + (Math.random()-0.4)*0.06).toFixed(2), 0.05, 0.95 );
+      hist.push(cur);
+    }
+    const soil = Math.floor(Math.random()*40) + 30; // 30 - 70 %
+    plots.push({ ndviHistory: hist, soil, emoji: '🌾', harvested:false });
+  }
+  dayCount = HISTORY_DAYS;
+}
+
+function buildFarmDOM() {
+  const farm = document.getElementById('farm');
+  farm.innerHTML = '';
+  for (let i=0;i<NUM_PLOTS;i++){
+    const p = plots[i];
+    const el = document.createElement('div');
+    el.className = 'plot';
+    el.setAttribute('data-idx', i);
+    el.innerHTML = `<div class="emoji">${p.emoji}</div>
+                    <div class="mini">NDVI ${p.ndviHistory[p.ndviHistory.length-1].toFixed(2)}</div>
+                    <div class="mini">Soil ${p.soil}%</div>`;
+    el.onclick = () => selectPlot(i);
+    farm.appendChild(el);
+  }
+  refreshPlotSelection();
+}
+
+/* ---------- Selection & UI ---------- */
+function selectPlot(i) {
+  if (gameEnded) return;
+  selectedPlot = i;
+  refreshPlotSelection();
+  updatePlotDetails();
+  updateChart(i);
+}
+
+function refreshPlotSelection() {
+  const nodes = document.querySelectorAll('#farm .plot');
+  nodes.forEach(node=>{
+    const idx = Number(node.getAttribute('data-idx'));
+    if (idx === selectedPlot) node.classList.add('selected'); else node.classList.remove('selected');
+    // update small labels
+    const p = plots[idx];
+    node.querySelector('.mini').textContent = `NDVI ${p.ndviHistory[p.ndviHistory.length-1].toFixed(2)}`;
+    node.querySelectorAll('.mini')[1].textContent = `Soil ${p.soil}%`;
+  });
+}
+
+function updatePlotDetails() {
+  const label = document.getElementById('selectedLabel');
+  const details = document.getElementById('plotDetails');
+  if (selectedPlot === null) {
+    label.textContent = 'No plot selected';
+    details.textContent = 'Click a plot to see NDVI and soil moisture.';
+  } else {
+    const p = plots[selectedPlot];
+    label.textContent = `Plot ${selectedPlot+1}`;
+    details.innerHTML = `NDVI: <strong>${p.ndviHistory[p.ndviHistory.length-1].toFixed(2)}</strong> &nbsp; | &nbsp; Soil Moisture: <strong>${p.soil}%</strong>`;
+  }
+}
+
+/* ---------- Toast ---------- */
+function showToast(msg, time=2200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove('show'), time);
+}
+
+/* ---------- Score & End ---------- */
+function updateScoreDisplay() {
+  document.getElementById('scoreText').textContent = `Sustainability: ${sustainability}`;
+  const pct = clamp(sustainability, 0, 100);
+  document.getElementById('sustainInner').style.width = pct + '%';
+  document.getElementById('dayCounter').textContent = `Day ${dayCount}`;
+}
+
+function endGame(message) {
+  gameEnded = true;
+  document.getElementById('endMessage').textContent = message;
+  const avgNDVI = averageLatestNDVI().toFixed(2);
+  document.getElementById('endSub').textContent = `Final sustainability ${sustainability}. Avg NDVI ${avgNDVI}`;
+  document.getElementById('endScreen').style.display = 'flex';
+  showToast(message, 4000);
+}
+
+/* ---------- Actions: Irrigate / Fertilize / Harvest / Advance ---------- */
+function irrigate() {
+  if (gameEnded) return;
+  if (selectedPlot === null) return showToast('Select a plot first!');
+  const p = plots[selectedPlot];
+  p.soil = clamp(p.soil + 10, 0, 100);
+  // immediate NDVI bump
+  const bump = 0.04 + Math.random()*0.02;
+  const newNDVI = clamp(p.ndviHistory[p.ndviHistory.length-1] + bump, 0, 0.99);
+  // push into today's value (we model immediate change and also history will be updated next advance)
+  p.ndviHistory[p.ndviHistory.length-1] = +newNDVI.toFixed(2);
+  sustainability = clamp(sustainability + 2, -999, 999);
+  refreshPlotSelection();
+  updatePlotDetails();
+  updateChart(selectedPlot);
+  updateScoreDisplay();
+  showToast('💧 Irrigation applied to plot ' + (selectedPlot+1));
+}
+
+function fertilize() {
+  if (gameEnded) return;
+  if (selectedPlot === null) return showToast('Select a plot first!');
+  const p = plots[selectedPlot];
+  // fertilizer increases NDVI and sustainability a bit
+  const bump = 0.06 + Math.random()*0.03;
+  const newNDVI = clamp(p.ndviHistory[p.ndviHistory.length-1] + bump, 0, 0.99);
+  p.ndviHistory[p.ndviHistory.length-1] = +newNDVI.toFixed(2);
+  p.soil = clamp(p.soil + 4, 0, 100);
+  sustainability = clamp(sustainability + 3, -999, 999);
+  refreshPlotSelection();
+  updatePlotDetails();
+  updateChart(selectedPlot);
+  updateScoreDisplay();
+  showToast('🌱 Fertilizer applied to plot ' + (selectedPlot+1));
+}
+
+function harvest() {
+  if (gameEnded) return;
+  if (selectedPlot === null) return showToast('Select a plot to harvest!');
+  const p = plots[selectedPlot];
+  // harvesting reduces NDVI but gives sustainability boost or penalty depending on NDVI
+  const ndvi = p.ndviHistory[p.ndviHistory.length-1];
+  if (ndvi < 0.25) {
+    // poor harvest
+    sustainability = clamp(sustainability - 6, -999, 999);
+    showToast('⚠️ Harvest failed — low NDVI. Sustainability dropped.');
+  } else {
+    sustainability = clamp(sustainability + 8, -999, 999);
+    // after harvest NDVI drops
+    p.ndviHistory[p.ndviHistory.length-1] = +(ndvi * 0.6).toFixed(2);
+    showToast('🌾 Harvest successful! Sustainability increased.');
+  }
+  refreshPlotSelection();
+  updatePlotDetails();
+  updateChart(selectedPlot);
+  updateScoreDisplay();
+}
+
+/* Advance day: apply seasonality and random changes across all plots,
+   shift history and append today's value.
+*/
+function advanceDay() {
+  if (gameEnded) return;
+  // for each plot compute new NDVI based on last NDVI and soil
+  for (let p of plots){
+    const last = p.ndviHistory[p.ndviHistory.length-1];
+    // soil effect: higher soil increases chance of growth
+    const soilFactor = (p.soil / 100);
+    // random daily delta between -0.05 and +0.06, biased by soilFactor
+    const delta = (Math.random()*0.11 - 0.05) + (soilFactor - 0.5) * 0.06;
+    let next = clamp( +(last + delta).toFixed(3), 0.02, 0.99 );
+    // soil dries out daily
+    p.soil = clamp(Math.round(p.soil - (3 + Math.random()*5)), 0, 100);
+    // push new value to history
+    p.ndviHistory.push(+next.toFixed(2));
+    // keep history same length for display if you want (we keep growing so chart accumulates)
+  }
+  dayCount++;
+  // sustainability small random drop due to maintenance, maybe a small uptick if many plots improved
+  const avgChange = plots.reduce((s,p)=> s + (p.ndviHistory[p.ndviHistory.length-1] - p.ndviHistory[p.ndviHistory.length-2]), 0) / NUM_PLOTS;
+  // If avgChange positive, small sustainability gain else small loss
+  const sustainDelta = Math.round((avgChange) * 40) + (Math.floor(Math.random()*3) - 1); // roughly maps NDVI delta to score
+  sustainability = clamp(sustainability + sustainDelta, -999, 999);
+
+  // update UI
+  refreshPlotSelection();
+  updatePlotDetails();
+  updateChart(selectedPlot);
+  updateScoreDisplay();
+
+  showToast('⏭ A day has passed.');
+
+  // check for end conditions
+  if (sustainability <= 0) {
+    endGame('Your farm collapsed! 🌍');
+  } else if (sustainability >= 100) {
+    endGame('Congratulations! 🌟 Sustainable farming achieved!');
+  }
+}
+
+/* ---------- Chart (Chart.js) ---------- */
+function averageLatestNDVI(){
+  const sum = plots.reduce((s,p)=> s + p.ndviHistory[p.ndviHistory.length-1], 0);
+  return sum / plots.length;
+}
+
+function initChart() {
+  const ctx = document.getElementById('ndviChart').getContext('2d');
+  const labels = Array.from({length: dayCount}, (_,i)=> `Day ${i+1}`);
+  const avgData = [];
+  for (let d=0; d<dayCount; d++){
+    let sum=0;
+    for (let p of plots) sum += p.ndviHistory[d];
+    avgData.push(+ (sum/plots.length).toFixed(2));
+  }
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Average NDVI',
+        data: avgData,
+        tension: 0.35,
+        borderColor: '#2a7f2a',
+        backgroundColor: 'transparent',
+        pointRadius: 4,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { suggestedMin: 0, suggestedMax: 1, title:{display:true, text:'NDVI (0-1)'} },
+        x: { title:{display:true,text:'Day'} }
+      },
+      plugins: {
+        legend: { display: true }
+      }
+    }
+  });
+}
+
+function updateChart(forPlot = null) {
+  if (!chart) return;
+  // if a plot is selected, show its NDVI history; otherwise show average
+  if (forPlot === null) {
+    // average over all plots for each day index
+    const maxLen = Math.max(...plots.map(p=>p.ndviHistory.length));
+    const labels = Array.from({length: maxLen}, (_,i)=> `Day ${i+1}`);
+    const avgData = labels.map((_,d)=>{
+      let sum=0, count=0;
+      for (let p of plots){
+        if (p.ndviHistory[d] !== undefined){ sum += p.ndviHistory[d]; count++; }
+      }
+      return count ? +(sum/count).toFixed(2) : null;
+    });
+    chart.data.labels = labels;
+    chart.data.datasets[0].label = 'Average NDVI';
+    chart.data.datasets[0].data = avgData;
+  } else {
+    const hist = plots[forPlot].ndviHistory;
+    const labels = hist.map((_,i) => `Day ${i+1}`);
+    chart.data.labels = labels;
+    chart.data.datasets[0].label = `Plot ${forPlot+1} NDVI`;
+    chart.data.datasets[0].data = hist;
+  }
+  chart.update();
+}
+
+/* ---------- Start & Restart ---------- */
+function startGame() {
+  // hide tutorial and focus
+  const tut = document.getElementById('tutorial');
+  if (tut) tut.style.display = 'none';
+}
+
+function restartGame() {
+  // reset everything
+  document.getElementById('endScreen').style.display = 'none';
+  sustainability = INITIAL_SUSTAIN;
+  selectedPlot = null;
+  gameEnded = false;
+  seedPlots();
+  buildFarmDOM();
+  updatePlotDetails();
+  updateScoreDisplay();
+  if (!chart) initChart(); else {
+    updateChart(null);
+  }
+  showToast('Game reset — good luck!');
+}
+
+/* ---------- Boot ---------- */
+(function boot(){
+  seedPlots();
+  buildFarmDOM();
+  updatePlotDetails();
+  initChart();
+  updateScoreDisplay();
+})();
+</script>
 </body>
 </html>
